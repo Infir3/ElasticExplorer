@@ -1,10 +1,6 @@
 package com.sb.elastic;
 
 import org.apache.http.HttpHost;
-import org.elasticsearch.action.bulk.BulkRequest;
-import org.elasticsearch.action.bulk.BulkRequestBuilder;
-import org.elasticsearch.action.bulk.BulkResponse;
-import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.RestClient;
@@ -16,12 +12,12 @@ import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 @Controller
@@ -31,7 +27,9 @@ public class QueryController {
 
     @RequestMapping("/query")
     @ResponseBody
-    public void query() {
+    public List query() {
+        List<Object> response = new ArrayList<>();
+
         RestHighLevelClient client = new RestHighLevelClient(
                 RestClient.builder(
                         new HttpHost("localhost", 9200, "http")));
@@ -52,12 +50,16 @@ public class QueryController {
                 String sourceAsString = hit.getSourceAsString();
                 log.info(sourceAsString);
                 Map<String, Object> sourceAsMap = hit.getSourceAsMap();
+                response.add(sourceAsMap);
             }
 
             client.close();
+
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        return response;
 
 
     }
