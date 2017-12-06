@@ -60,8 +60,42 @@ public class QueryController {
         }
 
         return response;
+    }
 
+    @RequestMapping("/queryRemote")
+    @ResponseBody
+    public List queryRemote() {
+        List<Object> response = new ArrayList<>();
 
+        RestHighLevelClient client = new RestHighLevelClient(
+                RestClient.builder(
+                        new HttpHost("vnew.verstehe.local", 3500, "http")));
+
+        try {
+
+            SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+
+            SearchRequest searchRequest = new SearchRequest("tpc-testdaten-2017.10");
+            searchRequest.source(sourceBuilder);
+
+            SearchResponse searchResponse = client.search(searchRequest);
+
+            SearchHits hits = searchResponse.getHits();
+            SearchHit[] searchHits = hits.getHits();
+            for (SearchHit hit : searchHits) {
+                String sourceAsString = hit.getSourceAsString();
+                log.info(sourceAsString);
+                Map<String, Object> sourceAsMap = hit.getSourceAsMap();
+                response.add(sourceAsMap);
+            }
+
+            client.close();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return response;
     }
 
 }
