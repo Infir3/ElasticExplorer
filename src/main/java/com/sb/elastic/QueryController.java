@@ -8,6 +8,11 @@ import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
+import org.elasticsearch.search.aggregations.AggregationBuilders;
+import org.elasticsearch.search.aggregations.Aggregations;
+import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
+import org.elasticsearch.search.aggregations.metrics.sum.Sum;
+import org.elasticsearch.search.aggregations.metrics.sum.SumAggregationBuilder;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,6 +24,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
+import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
 
 @Controller
 public class QueryController {
@@ -79,6 +86,20 @@ public class QueryController {
         return this.formatResponse(searchResponse);
     }
 
+    /**
+     * Übersetzung des folgenden Querys:
+     * SELECT SUM("ss_sales_price") as "ss_sales_price" FROM
+     (SELECT store."S_STORE_NAME" AS "Storename", item."I_CATEGORY" AS "Category", sum(store_sales."SS_SALES_PRICE") AS "ss_sales_price"
+     FROM S320.store_sales as store_sales, S320.item as item, S320.store as store, S320.date_dim as date_dim
+     WHERE (store."S_STORE_NAME"  =   'ought' AND item."I_CATEGORY"  = 'Children'
+     AND store_sales."SS_ITEM_SK" = item."I_ITEM_SK" AND store_sales."SS_STORE_SK" = store."S_STORE_SK"
+     AND date_dim."D_MOY"  =  '11' AND date_dim."D_YEAR"  =  '2017'
+     AND store_sales."SS_SOLD_DATE_SK" = date_dim."D_DATE_SK")
+     GROUP BY item.I_CATEGORY, store.S_STORE_NAME
+     ORDER BY "Storename", "Category")
+     * @return
+     * @throws IOException
+     */
     @RequestMapping("/queryStoreSalesTest")
     @ResponseBody
     public List queryStoreSalesTest() throws IOException {
@@ -86,18 +107,30 @@ public class QueryController {
 
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
 
-        sourceBuilder.query(QueryBuilders.termQuery("s_store_name  ", "ought"));
-        sourceBuilder.query(QueryBuilders.termQuery("d_moy", 11));
-        sourceBuilder.query(QueryBuilders.termQuery("d_year", 2017));
+        sourceBuilder.query(boolQuery()
+//                .must(QueryBuilders.termQuery("i_category", "Children"))
+                .must(QueryBuilders.termQuery("s_store_name","ought"))
+                .must(QueryBuilders.termQuery("d_year", 2017))
+                .must(QueryBuilders.termQuery("d_moy", 11))
+        );
 
         String[] includeFields = new String[] {"s_store_name", "i_category", "ss_sales_price"};
         String[] excludeFields = new String[] {};
         sourceBuilder.fetchSource(includeFields, excludeFields);
 
+        SumAggregationBuilder aggregation = AggregationBuilders.sum("ss_sales_price")
+                .field("ss_sales_price");
+        sourceBuilder.aggregation(aggregation);
+
         SearchRequest searchRequest = new SearchRequest("tpcds_store_sales");
         searchRequest.source(sourceBuilder);
 
         SearchResponse searchResponse = client.search(searchRequest);
+
+        Aggregations aggregations = searchResponse.getAggregations();
+
+        Sum sum = aggregations.get("ss_sales_price");
+        log.info(sum.getValueAsString());
 
         client.close();
 
