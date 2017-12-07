@@ -25,76 +25,102 @@ public class QueryController {
 
     private final Logger log = LoggerFactory.getLogger(this.getClass());
 
-    @RequestMapping("/query")
+    @RequestMapping("/queryLocal")
     @ResponseBody
-    public List query() {
-        List<Object> response = new ArrayList<>();
-
+    public List query() throws IOException {
         RestHighLevelClient client = new RestHighLevelClient(
                 RestClient.builder(
                         new HttpHost("localhost", 9200, "http")));
 
-        try {
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.query(QueryBuilders.termQuery("ss_store_sk", 1));
 
-            SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-            sourceBuilder.query(QueryBuilders.termQuery("ss_store_sk", 1));
+        SearchRequest searchRequest = new SearchRequest("tpcds_mini");
+        searchRequest.source(sourceBuilder);
 
-            SearchRequest searchRequest = new SearchRequest("tpcds_mini");
-            searchRequest.source(sourceBuilder);
+        SearchResponse searchResponse = client.search(searchRequest);
 
-            SearchResponse searchResponse = client.search(searchRequest);
+        client.close();
 
-            SearchHits hits = searchResponse.getHits();
-            SearchHit[] searchHits = hits.getHits();
-            for (SearchHit hit : searchHits) {
-                String sourceAsString = hit.getSourceAsString();
-                log.info(sourceAsString);
-                Map<String, Object> sourceAsMap = hit.getSourceAsMap();
-                response.add(sourceAsMap);
-            }
-
-            client.close();
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        return response;
+        return this.formatResponse(searchResponse);
     }
 
     @RequestMapping("/queryRemote")
     @ResponseBody
-    public List queryRemote() {
-        List<Object> response = new ArrayList<>();
+    public List queryRemote() throws IOException {
+        RestHighLevelClient client = this.getRemoteClient();
 
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+
+        SearchRequest searchRequest = new SearchRequest("tpc-testdaten-2017.10");
+        searchRequest.source(sourceBuilder);
+
+        SearchResponse searchResponse = client.search(searchRequest);
+
+        client.close();
+
+        return this.formatResponse(searchResponse);
+    }
+
+    @RequestMapping("/queryStoreSales")
+    @ResponseBody
+    public List queryStoreSales() throws IOException {
+        RestHighLevelClient client = this.getRemoteClient();
+
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+
+        SearchRequest searchRequest = new SearchRequest("tpcds_store_sales");
+        searchRequest.source(sourceBuilder);
+
+        SearchResponse searchResponse = client.search(searchRequest);
+
+        client.close();
+
+        return this.formatResponse(searchResponse);
+    }
+
+    @RequestMapping("/queryStoreSalesTest")
+    @ResponseBody
+    public List queryStoreSalesTest() throws IOException {
+        RestHighLevelClient client = this.getRemoteClient();
+
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+
+        sourceBuilder.query(QueryBuilders.termQuery("s_store_name  ", "ought"));
+        sourceBuilder.query(QueryBuilders.termQuery("d_moy", 11));
+        sourceBuilder.query(QueryBuilders.termQuery("d_year", 2017));
+
+        String[] includeFields = new String[] {"s_store_name", "i_category", "ss_sales_price"};
+        String[] excludeFields = new String[] {};
+        sourceBuilder.fetchSource(includeFields, excludeFields);
+
+        SearchRequest searchRequest = new SearchRequest("tpcds_store_sales");
+        searchRequest.source(sourceBuilder);
+
+        SearchResponse searchResponse = client.search(searchRequest);
+
+        client.close();
+
+        return this.formatResponse(searchResponse);
+    }
+
+    private RestHighLevelClient getRemoteClient() {
         RestHighLevelClient client = new RestHighLevelClient(
                 RestClient.builder(
                         new HttpHost("vnew.verstehe.local", 3500, "http")));
+        return client;
+    }
 
-        try {
-
-            SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-
-            SearchRequest searchRequest = new SearchRequest("tpc-testdaten-2017.10");
-            searchRequest.source(sourceBuilder);
-
-            SearchResponse searchResponse = client.search(searchRequest);
-
-            SearchHits hits = searchResponse.getHits();
-            SearchHit[] searchHits = hits.getHits();
-            for (SearchHit hit : searchHits) {
-                String sourceAsString = hit.getSourceAsString();
-                log.info(sourceAsString);
-                Map<String, Object> sourceAsMap = hit.getSourceAsMap();
-                response.add(sourceAsMap);
-            }
-
-            client.close();
-
-        } catch (IOException e) {
-            e.printStackTrace();
+    private List formatResponse(SearchResponse searchResponse) {
+        List<Object> response = new ArrayList<>();
+        SearchHits hits = searchResponse.getHits();
+        SearchHit[] searchHits = hits.getHits();
+        for (SearchHit hit : searchHits) {
+            String sourceAsString = hit.getSourceAsString();
+            log.info(sourceAsString);
+            Map<String, Object> sourceAsMap = hit.getSourceAsMap();
+            response.add(sourceAsMap);
         }
-
         return response;
     }
 
