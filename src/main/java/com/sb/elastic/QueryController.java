@@ -1,5 +1,8 @@
 package com.sb.elastic;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import org.apache.http.HttpHost;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
@@ -10,7 +13,6 @@ import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.Aggregations;
-import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
 import org.elasticsearch.search.aggregations.metrics.sum.Sum;
 import org.elasticsearch.search.aggregations.metrics.sum.SumAggregationBuilder;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
@@ -34,7 +36,7 @@ public class QueryController {
 
     @RequestMapping("/queryLocal")
     @ResponseBody
-    public List query() throws IOException {
+    public String queryLocal() throws IOException {
         RestHighLevelClient client = new RestHighLevelClient(
                 RestClient.builder(
                         new HttpHost("localhost", 9200, "http")));
@@ -52,9 +54,9 @@ public class QueryController {
         return this.formatResponse(searchResponse);
     }
 
-    @RequestMapping("/queryRemote")
+    @RequestMapping(value = "/queryRemote", produces = "application/json")
     @ResponseBody
-    public List queryRemote() throws IOException {
+    public String queryRemote() throws IOException {
         RestHighLevelClient client = this.getRemoteClient();
 
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
@@ -69,9 +71,9 @@ public class QueryController {
         return this.formatResponse(searchResponse);
     }
 
-    @RequestMapping("/queryStoreSales")
+    @RequestMapping(value = "/queryStoreSales", produces = "application/json")
     @ResponseBody
-    public List queryStoreSales() throws IOException {
+    public String queryStoreSales() throws IOException {
         RestHighLevelClient client = this.getRemoteClient();
 
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
@@ -97,12 +99,10 @@ public class QueryController {
      AND store_sales."SS_SOLD_DATE_SK" = date_dim."D_DATE_SK")
      GROUP BY item.I_CATEGORY, store.S_STORE_NAME
      ORDER BY "Storename", "Category")
-     * @return
-     * @throws IOException
      */
-    @RequestMapping("/queryStoreSalesTest")
+    @RequestMapping(value = "/queryStoreSalesTest", produces = "application/json")
     @ResponseBody
-    public List queryStoreSalesTest() throws IOException {
+    public String queryStoreSalesTest() throws IOException {
         RestHighLevelClient client = this.getRemoteClient();
 
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
@@ -127,24 +127,25 @@ public class QueryController {
 
         SearchResponse searchResponse = client.search(searchRequest);
 
+        client.close();
+
         Aggregations aggregations = searchResponse.getAggregations();
 
         Sum sum = aggregations.get("ss_sales_price");
         log.info(sum.getValueAsString());
 
-        client.close();
+//        return sum.getValueAsString();
 
         return this.formatResponse(searchResponse);
     }
 
     private RestHighLevelClient getRemoteClient() {
-        RestHighLevelClient client = new RestHighLevelClient(
+        return new RestHighLevelClient(
                 RestClient.builder(
                         new HttpHost("vnew.verstehe.local", 3500, "http")));
-        return client;
     }
 
-    private List formatResponse(SearchResponse searchResponse) {
+    private String formatResponse(SearchResponse searchResponse) {
         List<Object> response = new ArrayList<>();
         SearchHits hits = searchResponse.getHits();
         SearchHit[] searchHits = hits.getHits();
@@ -154,7 +155,13 @@ public class QueryController {
             Map<String, Object> sourceAsMap = hit.getSourceAsMap();
             response.add(sourceAsMap);
         }
-        return response;
+
+        ObjectMapper objectMapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+        try {
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(response);
+        } catch (JsonProcessingException e) {
+            return e.getMessage();
+        }
     }
 
 }
