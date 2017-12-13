@@ -34,6 +34,9 @@ public class QueryController {
 
     private final Logger log = LoggerFactory.getLogger(this.getClass());
 
+    private final String INDEX_TPCDS_STORE_SALES = "tpcds_store_sales";
+    private final String INDEX_TPCDS_SS_I_S_D = "tpcds_ss_i_s_d"; // i_category truncated
+
     @RequestMapping("/queryLocal")
     @ResponseBody
     public String queryLocal() throws IOException {
@@ -108,7 +111,8 @@ public class QueryController {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
 
         sourceBuilder.query(boolQuery()
-//                .must(QueryBuilders.termQuery("i_category", "Children"))
+                .must(QueryBuilders.termQuery("i_category.keyword", "Children")) // funktioniert
+//                .must(QueryBuilders.matchPhraseQuery("i_category", "Children")) // funktioniert NICHT
                 .must(QueryBuilders.termQuery("s_store_name","ought"))
                 .must(QueryBuilders.termQuery("d_year", 2017))
                 .must(QueryBuilders.termQuery("d_moy", 11))
@@ -122,8 +126,10 @@ public class QueryController {
                 .field("ss_sales_price");
         sourceBuilder.aggregation(aggregation);
 
-        SearchRequest searchRequest = new SearchRequest("tpcds_store_sales");
+        SearchRequest searchRequest = new SearchRequest(INDEX_TPCDS_SS_I_S_D);
         searchRequest.source(sourceBuilder);
+
+        log.info(searchRequest.toString());
 
         SearchResponse searchResponse = client.search(searchRequest);
 
@@ -131,12 +137,24 @@ public class QueryController {
 
         Aggregations aggregations = searchResponse.getAggregations();
 
+        StringBuilder sb = new StringBuilder();
+
         Sum sum = aggregations.get("ss_sales_price");
         log.info(sum.getValueAsString());
 
-//        return sum.getValueAsString();
+        sb.append(aggregation.toString() + ": " +  sum.getValueAsString());
 
-        return this.formatResponse(searchResponse);
+        sb.append(System.lineSeparator());
+        sb.append(System.lineSeparator());
+
+        sb.append(this.formatResponse(searchResponse));
+
+        sb.append(System.lineSeparator());
+        sb.append(System.lineSeparator());
+
+        sb.append(searchRequest.toString());
+
+        return sb.toString();
     }
 
     private RestHighLevelClient getRemoteClient() {
