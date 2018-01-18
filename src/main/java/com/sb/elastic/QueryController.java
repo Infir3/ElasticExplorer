@@ -4,8 +4,15 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import org.apache.http.HttpHost;
+import org.elasticsearch.action.ActionRequestValidationException;
+import org.elasticsearch.action.DocWriteResponse;
+import org.elasticsearch.action.delete.DeleteRequest;
+import org.elasticsearch.action.delete.DeleteResponse;
+import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.action.support.replication.ReplicationResponse;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.index.query.QueryBuilders;
@@ -23,19 +30,18 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
 
 @Controller
 public class QueryController {
 
-    private final Logger log = LoggerFactory.getLogger(this.getClass());
+    private static final Logger LOG = LoggerFactory.getLogger(QueryController.class);
 
     private final String INDEX_TPCDS_STORE_SALES = "tpcds_store_sales";
     private final String INDEX_TPCDS_SS_I_S_D = "tpcds_ss_i_s_d"; // i_category truncated
+    private final String INDEX_JOIN_DATATYPE_TEST = "sb_join_datatype_test";
 
     @RequestMapping("/queryLocal")
     @ResponseBody
@@ -129,7 +135,7 @@ public class QueryController {
         SearchRequest searchRequest = new SearchRequest(INDEX_TPCDS_SS_I_S_D);
         searchRequest.source(sourceBuilder);
 
-        log.info(searchRequest.toString());
+        LOG.info(searchRequest.toString());
 
         SearchResponse searchResponse = client.search(searchRequest);
 
@@ -140,7 +146,7 @@ public class QueryController {
         StringBuilder sb = new StringBuilder();
 
         Sum sum = aggregations.get("ss_sales_price");
-        log.info(sum.getValueAsString());
+        LOG.info(sum.getValueAsString());
 
         sb.append(aggregation.toString() + ": " +  sum.getValueAsString());
 
@@ -157,6 +163,81 @@ public class QueryController {
         return sb.toString();
     }
 
+    /**
+     * Generiert die Dokumente, um den Join-Datatype zu testen.
+     * @return
+     * @throws IOException
+     */
+    @RequestMapping(value = "/generateJoinDatatypeTestIndex")
+    @ResponseBody
+    public String generateJoinDatatypeTestIndex() throws IOException {
+        RestHighLevelClient client = this.getRemoteClient();
+
+        // delete existing index
+        DeleteRequest deleteRequest = new DeleteRequest(INDEX_JOIN_DATATYPE_TEST);
+        try {
+            DeleteResponse deleteResponse = client.delete(deleteRequest);
+        } catch (ActionRequestValidationException e) {
+            LOG.info(e.getMessage());
+        }
+
+        // create parent
+        Map<String, Object> parent = new HashMap<String, Object>();
+        parent.put("name","Parent1");
+        parent.put("age", 40);
+        UUID parentId = UUID.randomUUID();
+        IndexRequest indexRequest = new IndexRequest(INDEX_JOIN_DATATYPE_TEST, "parent", parentId.toString())
+                .source(parent);
+
+        IndexResponse indexResponse = client.index(indexRequest);
+
+        // create children
+        Map<String, Object> child1 = new HashMap<String, Object>();
+        child1.put("name","Child1");
+        child1.put("age", 20);
+        child1.put("parentId", parentId.toString());
+        indexRequest = new IndexRequest(INDEX_JOIN_DATATYPE_TEST, "child", UUID.randomUUID().toString())
+                .source(child1);
+        indexRequest.parent("parent");
+        indexResponse = client.index(indexRequest);
+
+//        // create children
+//        Map<String, Object> child2 = new HashMap<String, Object>();
+//        child2.put("name","Child1");
+//        child2.put("age", 20);
+//        indexResponse = client.index(indexRequest);
+//        indexRequest = new IndexRequest(INDEX_JOIN_DATATYPE_TEST, "child", UUID.randomUUID().toString())
+//                .source(child2);
+//        indexRequest.parent(parentId.toString());
+//        indexResponse = client.index(indexRequest);
+
+        client.close();
+
+        String index = indexResponse.getIndex();
+        String type = indexResponse.getType();
+        String id = indexResponse.getId();
+        long version = indexResponse.getVersion();
+
+        String msg = "";
+        if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
+            msg = indexResponse.getResult().toString();
+        } else if (indexResponse.getResult() == DocWriteResponse.Result.UPDATED) {
+            msg = indexResponse.getResult().toString();
+        }
+        ReplicationResponse.ShardInfo shardInfo = indexResponse.getShardInfo();
+        if (shardInfo.getTotal() != shardInfo.getSuccessful()) {
+            // Handle the situation where number of successful shards is less than total shards
+        }
+        if (shardInfo.getFailed() > 0) {
+            for (ReplicationResponse.ShardInfo.Failure failure : shardInfo.getFailures()) {
+                String reason = failure.reason();
+                // Handle the potential failures
+            }
+        }
+
+        return msg;
+    }
+
     private RestHighLevelClient getRemoteClient() {
         return new RestHighLevelClient(
                 RestClient.builder(
@@ -169,7 +250,7 @@ public class QueryController {
         SearchHit[] searchHits = hits.getHits();
         for (SearchHit hit : searchHits) {
             String sourceAsString = hit.getSourceAsString();
-            log.info(sourceAsString);
+            LOG.info(sourceAsString);
             Map<String, Object> sourceAsMap = hit.getSourceAsMap();
             response.add(sourceAsMap);
         }
