@@ -15,6 +15,7 @@ import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.support.replication.ReplicationResponse;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
@@ -32,6 +33,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import java.io.IOException;
 import java.util.*;
 
+import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
 
 @Controller
@@ -182,7 +184,7 @@ public class QueryController {
         }
 
         // create parent
-        Map<String, Object> parent = new HashMap<String, Object>();
+        Map<String, Object> parent = new HashMap<>();
         parent.put("name","Parent1");
         parent.put("age", 40);
         UUID parentId = UUID.randomUUID();
@@ -192,7 +194,7 @@ public class QueryController {
         IndexResponse indexResponse = client.index(indexRequest);
 
         // create children
-        Map<String, Object> child1 = new HashMap<String, Object>();
+        Map<String, Object> child1 = new HashMap<>();
         child1.put("name","Child1");
         child1.put("age", 20);
         child1.put("parentId", parentId.toString());
@@ -237,6 +239,73 @@ public class QueryController {
 
         return msg;
     }
+
+    // funktioniert eh nicht, deshalb auskommentiert
+//    /**
+//     * Generiert die Dokumente, um den Join-Datatype zu testen.
+//     * @return
+//     * @throws IOException
+//     */
+//    @RequestMapping(value = "/generateJoinDatatypeTestIndex")
+//    @ResponseBody
+//    public String generateJoinDatatypeTestIndex() throws IOException {
+//        RestHighLevelClient client = this.getRemoteClient();
+//
+//        // delete existing index
+//        DeleteRequest deleteRequest = new DeleteRequest("questions-and-answers");
+//        try {
+//            DeleteResponse deleteResponse = client.delete(deleteRequest);
+//        } catch (ActionRequestValidationException e) {
+//            LOG.info(e.getMessage());
+//        }
+//
+//        XContentBuilder builder = jsonBuilder()
+//                .startObject()
+//                    .startObject("mappings")
+//                        .startObject("doc")
+//                            .startObject("properties")
+//                                .startObject("my_join_field")
+//                                    .field("type", "join")
+//                                    .startObject("relations")
+//                                        .field("question", "answer")
+//                                    .endObject()
+//                                .endObject()
+//                            .endObject()
+//                        .endObject()
+//                    .endObject()
+//                .endObject();
+//
+//        String json = builder.string();
+//
+//        Map<String, String> mapping = new HashMap<>();
+//        client.getLowLevelClient().performRequest("PUT", "questions-and-answers", json);
+//
+//        client.close();
+//
+//        String index = indexResponse.getIndex();
+//        String type = indexResponse.getType();
+//        String id = indexResponse.getId();
+//        long version = indexResponse.getVersion();
+//
+//        String msg = "";
+//        if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
+//            msg = indexResponse.getResult().toString();
+//        } else if (indexResponse.getResult() == DocWriteResponse.Result.UPDATED) {
+//            msg = indexResponse.getResult().toString();
+//        }
+//        ReplicationResponse.ShardInfo shardInfo = indexResponse.getShardInfo();
+//        if (shardInfo.getTotal() != shardInfo.getSuccessful()) {
+//            // Handle the situation where number of successful shards is less than total shards
+//        }
+//        if (shardInfo.getFailed() > 0) {
+//            for (ReplicationResponse.ShardInfo.Failure failure : shardInfo.getFailures()) {
+//                String reason = failure.reason();
+//                // Handle the potential failures
+//            }
+//        }
+//
+//        return msg;
+//    }
 
     private RestHighLevelClient getRemoteClient() {
         return new RestHighLevelClient(
