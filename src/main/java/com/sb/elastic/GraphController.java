@@ -8,7 +8,6 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Random;
 import org.apache.http.HttpHost;
 import org.apache.http.util.EntityUtils;
 import org.elasticsearch.ElasticsearchStatusException;
@@ -120,19 +119,20 @@ public class GraphController {
         return reportList;
     }
 
+    /**
+     * Erstellt eine Liste an Reports, die jeweils n Kennzahlen mit einer Id m enthalten. M und n
+     * sind dabei beide binomial verteilt.
+     */
     private List<Report> createReportListRandomized() {
         List<Report> reportList = new ArrayList<>();
 
-        Random random = new Random();
         for (int i = 0; i < 100; i++) {
             String title = "temp" + i;
             String description = "description" + i;
             Report report = new Report(title, description);
-//            int numberOfMeasures = random.nextInt(10);
             int numberOfMeasures = this.getBinomial(10, 0.5);
             for (int j = 0; j < numberOfMeasures; j++) {
                 int measure = this.getBinomial(10, 0.5);
-//                int measure = random.nextInt(10) + 1;
                 report.getMeasures().add(measure);
             }
             reportList.add(report);
@@ -213,9 +213,9 @@ public class GraphController {
         double log_q = Math.log(1.0 - p);
         int x = 0;
         double sum = 0;
-        for(;;) {
+        for (; ; ) {
             sum += Math.log(Math.random()) / (n - x);
-            if(sum < log_q) {
+            if (sum < log_q) {
                 return x;
             }
             x++;
